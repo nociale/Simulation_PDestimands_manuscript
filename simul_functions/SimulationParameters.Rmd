@@ -1,0 +1,309 @@
+---
+title: "Simulation of raw data and estimands&estimators in early Parkinson's disease"
+author: "Marcel Wolbers, Alessandro Noci"
+date: "**Final version** - last change: `r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  rmarkdown::html_document:
+    highlight: pygments
+    number_sections: yes
+    self_contained: yes
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+# Description of the simulation parameters 
+
+Estimands and corresponding estimators will be evaluated in hypothetical (simulated) 1:1 double-blind randomized trials of treatment/intervention vs placebo/control in early Parkinson's disease. Simulation of data will be inspired by the PPMI analysis but we do not aim to exactly replicate PPMI data. The relevant simulation parameters are described below.
+
+## Sample size (9 scenarios) 
+
+From 75 to 300 patients per group with a scenario every 25 subjects, i.e. 75, 100, 125, 150 etc.. .
+
+
+## Follow-up duration and visit frequency 
+Bi-monthly visits from randomization until 12 months of follow-up. 
+
+## Simulation of UPDRS trajectories prior to any intercurrent event 
+
+### Control arm 
+
+Simulation according to a linear mixed effects model with the following parameters: 
+
+- Fixed intercept of 30 points (at baseline="time 0") and slope of 10 points/year.
+- Random intercept $\sim N(0,sd=10)$, slope $\sim N(0,sd=5)$, cor(intercept,slope)=0.5.
+- Residual/measurement error $\sim N(0,sd=6)$.
+
+**Justification**: Based on fit to PPMI data analysis with generous rounding to "nice" numbers.
+
+### Intervention arm (2 scenarios) 
+
+Constant treatment effect: same as control but fixed slope reduced by 40% to 6 points/year (4 points / 40% reduction by month 12).
+
+## Simulation of intercurrent events (ICEs) and missing data 
+
+Discontinuation of randomized treatment (ICE1) and initiation of rescue medication (ICE2) may occur. Moreover, subjects may drop out from the study altogether. We do not assume that rescue medication can only be initiated after discontinuation of randomized treatment. Rather, we assume a study where subjects are encouraged to stay on randomized treatment even after rescue medication has been initiated.
+
+
+### Simulation of time of ICE1: discontinuation of randomized treatment (3 scenarios) 
+
+We propose a simple model which assumes that the probability of discontinuation of randomized treatment is constant at each visit as follows:
+
+- *Unequal probability of discontinuation on both arms*: 2% after each visit on control [overall discontinuation probability 11.42%], 3% after each visit on intervention [overall: 16.70%].
+
+**Justification**: No data is available from PPMIT to inform this. Therefore, it seemed best to keep this relatively simple.
+
+### Simulation of time of ICE2: initiation of rescue treatment (dopaminergic treatment) 
+
+The probability of initiation of rescue treatment after each visit will be simulated independently of ICE1 and according to a logistic model with the following specification: 
+
+- A subject with a current UPDRS score of 30 at a visit has:
++ a probability of 0% to initiate rescue treatment after the baseline visit
++ a probability of 2.5% to initiate rescue treatment after the month 2 or 4 visits, respectively
++ a probability of 7.5% to initiate rescue treatment after the month 6, 8, or 10 visits, respectively
+- The probability of rescue treatment initiation additionally depends on the current UPDRS score at the visit. The odds ratio of a +10 point increase in UPDRS score is 1.5.
+
+**Justification**: Based on fit to PPMI data analysis with generous rounding to "nice" numbers.
+
+### Simulation of study drop out [conditional on discontinuation]
+
+We assume that subjects who discontinue randomized treatment after a visit have a 50% probability of drop-out from the study. 
+
+**Justification**: No data is available from PPMIT to inform this. Therefore, it seemed best to keep this simple.
+
+
+## Effect of ICE1 and ICE2 on UPDRS trajectories 
+
+### Effect of ICE1 (treatment discontinuation) 
+
+- Control arm: No effect.
+- Intervention arm: Fixed slope from this visit onwards is identical to control slope.
+
+### Effect of ICE2 (initiation of dopaminergic treatment) 
+
+- "Immediate" change in the subject's simulated mean trajectory will be modeled using a Beta-distribution with $\alpha=2$ and $\beta=1.5$ which is re-scaled to a range from -25 to 0 points. This implies a median drop by `r formatC(qbeta(0.5,shape1=2,shape2=1.5)*25-25,digits=1,format="f")` points (IQR from `r formatC(qbeta(0.25,shape1=2,shape2=1.5)*25-25,digits=1,format="f")` to `r formatC(qbeta(0.75,shape1=2,shape2=1.5)*25-25,digits=1,format="f")` points).
+-  Fixed slope from this visit onwards is 0. 
+
+**Justification**: Inspired by the PPMI analysis. Note that a lower variability is used here than reported in the descriptive analysis (which reports changes in *observed values*) because the simulation uses the drops for modeling the subjects's *mean trajectory* to which further measurement error/variability is added.
+
+# Estimands which will be explored 
+
+| ICE                                    |  Estimand 1       |  Estimand 2       |  Estimand 3      |
+|----------------------------------------|-------------------|-------------------|------------------|
+| Discontinuation of study treatment     |  Treatment policy |  Treatment policy |  Hypothetical    |
+| Initiation of rescue medicatation      |  Hypothetical     |  Treatment policy |  Hypothetical    |
+
+- Estimand 1 assesses the treatment effect in a _world without rescue treatment_
+- Estimand 2 assesses the treatment effect in the real world
+- Estimand 3 is a "per protocol"-type analysis
+
+The purpose of this project is not necessarily to promote any of these estimands but rather to present them and discuss their respective advantages, disadvantages, and uses in a balanced way (e.g. estimand 3 may be appropriate for internal decision making after phase 2 study but rather not for regulatory approval).
+
+# Estimators for the different estimands 
+
+## Estimand 1
+
+### Estimator 1 for estimand 1
+
+1. Remove data after rescue medication
+2. Multiple imputation of missing data using reference-based imputation for the intervention arm 
+- MAR-fit (used for draws of multivariate $\mu$'s and $\Sigma$'s per arm) is based on
++ only data prior to discontinuation of study treatment on the intervention arm
++ all data which remain after step 1. on the control arm 
+- Data after treatment discontinuation and prior to rescue medication is only imputed if it is missing (otherwise, observed data is used) 
+
+The primary reference-based imputation method is copy increments from reference (CIR) but other methods will also be explored.
+
+### Estimator 2 for estimand 1
+
+Remove data after rescue medication. Then use MMRM or multiple imputation under a MAR assumption.
+
+### Estimators 3 and 4 for estimand 1
+
+Remove data after rescue medication. Use multiple imputation under a MAR assumption which includes in the base imputation model a time-varying covariate representing compliance to the assigned treatment group:
+
+1. Include `group*is_post_trt_stop` in the imputation model, where `group` is a categorical variable indicating which group each patient belongs to; and `is_post_trt_stop` is a binary variable that takes value 0 if the corresponding observation happens prior to treatment discontinuation and 1 if it happens after treatment discontinuation.
+
+2. Include `group*time_from_trt_stop` in the imputation model, where `time_from_trt_stop` is a numeric variable that indicates the units of time passed since treatment discontinuation; it takes value 0 if the corresponding observation happens prior to treatment discontinuation, 1 if it is the first visit after treatment discontinuation, 2 if it is the second visit etc.. .
+
+## Estimand 2
+
+### Estimator 1 for estimand 2
+
+Include all data; use MMRM or multiple imputation under a MAR assumption to cope for missing data due to study drop-out.  
+
+### Estimators 2 and 3 for estimand 2
+
+Include all data; use multiple imputation under a MAR assumption which includes in the base imputation model time-varying covariates representing compliance to the assigned treatment group and indicating whether a subject is under rescue medication:
+
+1. Include `group*is_post_start_dopa + group*is_post_trt_stop` in the imputation model, `is_post_start_dopa` is a binary variable that takes value 0 if the corresponding observation happens prior to the start of dopaminergic treatment as rescue medication and 1 otherwise.
+
+2. Include `group*is_post_start_dopa + group*time_from_trt_stop` in the imputation model, where all the variables have been described previously.
+
+## Estimand 3
+
+Include only data prior to any ICE. Then use MMRM or multiple imputation under a MAR assumption. 
+
+# Implications of the chosen simulation parameters 
+
+The tables and graphs for each example below are based on large datasets with 100'000 patients per group.
+
+```{r mychunk, include = TRUE, results="asis", echo = FALSE, warning = FALSE, message = FALSE} 
+
+set.seed(12345)
+
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(MASS)
+
+source("simul_functions.R")
+
+#----- Parameter which are identical across scenarios
+
+n1 <- n2 <- 1E5 # sample size per group
+
+time <- seq(0,12,by=2) 
+
+# create Sigma
+sd_intercept <- 10
+sd_slope <- 5
+cor_slope_inter <- 0.5
+
+sd_error <- 6
+
+covRE <- matrix(c(sd_intercept^2,cor_slope_inter*sd_intercept*sd_slope,
+                  cor_slope_inter*sd_intercept*sd_slope,sd_slope^2),ncol=2) 
+Sigma <- cbind(1,time/12)%*%covRE%*%rbind(1,time/12)+diag(sd_error^2,nrow=length(time))
+
+# mean trajectory control
+mu2 <- 30+10/12*time
+
+# random drop if subjects initiates dopaminergic treatment
+dopa_init_change <- rbeta(n1+n2,shape1=2,shape2=1.5)*25-25
+dopa_slope <- 0
+
+# probability of drop-out
+prob_drop_out <- 0.5
+
+# mean trajectory intervention 
+mu1 <- 30+6/12*time
+
+# change in slope after treatment stop
+stop_slope2 <- 10/12
+stop_slope1 <- 10/12
+
+
+for (scenario in 1:4){
+  
+  
+  if (scenario==1){
+    scenarioName <- "No treatment stop, no dopa initiations"
+    
+    # parameters for stopping treatment
+    model_stop_trt_intervention <-        ~1
+    model_coef_stop_trt_intervention <- -1E6
+    model_stop_trt_control <-        ~1
+    model_coef_stop_trt_control <- -1E6
+    
+    # parameters for start of dopaminergic treatment
+    model_start_dopa <-      ~1
+    model_coef_start_dopa <- -1E6
+    
+  }
+  
+  if (scenario==2){
+    scenarioName <- "Unequal stop rate, no dopa initiations"
+    
+    # parameters for stopping treatment
+    model_stop_trt_intervention <-        ~1 + I(visit >= 0)
+    model_coef_stop_trt_intervention <-  c(0, log(0.03/(1-0.03)))
+    model_stop_trt_control <-        ~1 + I(visit >= 0)
+    model_coef_stop_trt_control <-  c(0,  log(0.02/(1-0.02)))
+    
+    # parameters for start of dopaminergic treatment
+    model_start_dopa <-      ~1
+    model_coef_start_dopa <- -1E6
+  }
+  
+  if (scenario==3){
+    scenarioName <- "No treatment stop, including dopa initiations"
+    
+    # parameters for stopping treatment
+    model_stop_trt_intervention <-        ~1
+    model_coef_stop_trt_intervention <- -1E6
+    model_stop_trt_control <-        ~1
+    model_coef_stop_trt_control <- -1E6
+    
+    # parameters for start of dopaminergic treatment
+    model_start_dopa <-        ~1+I(visit==0)+I(visit%in%c(1,2))+  I(visit>2)+      I((x-30)/10)
+    model_coef_start_dopa <-  c(0,      -1E6,   log(0.025/0.975),log(0.075/(1-0.075)), log(1.5))
+    
+  }
+  
+  if (scenario==4){
+    scenarioName <- "Unequal stop rate, including dopa initiations"
+    
+    # parameters for stopping treatment
+    model_stop_trt_intervention <-        ~1 + I(visit >= 0)
+    model_coef_stop_trt_intervention <-  c(0, log(0.03/(1-0.03)))
+    model_stop_trt_control <-        ~1 + I(visit >= 0)
+    model_coef_stop_trt_control <-  c(0,  log(0.02/(1-0.02)))
+    
+    # parameters for start of dopaminergic treatment
+    model_start_dopa <-        ~1+I(visit==0)+I(visit%in%c(1,2))+  I(visit>2)+      I((x-30)/10)
+    model_coef_start_dopa <-  c(0,      -1E6,   log(0.025/0.975),log(0.075/(1-0.075)), log(1.5))
+    
+  }
+  
+  # simulate data
+  
+  data <- simple_trajectories(mu2, Sigma, mu1, Sigma, n2, n1, time)
+  
+  data <- simulate_ices_and_adjust_trajectories(data,
+                                               mu2,
+                                               mu1,
+                                               model_stop_trt_intervention,
+                                               model_coef_stop_trt_intervention,
+                                               model_stop_trt_control,
+                                               model_coef_stop_trt_control,
+                                               model_start_dopa,
+                                               model_coef_start_dopa,
+                                               prob_drop_out,
+                                               stop_slope2,
+                                               stop_slope1,
+                                               dopa_init_change,
+                                               dopa_slope)
+  
+  
+  # Simple summary and plot
+  cat("\n\n")
+  cat("### ",scenarioName,"\n")
+  
+  d_tab <- data %>% filter(visit==6) %>% 
+    mutate(stop_treatment=I(trt_stop_visit<6),
+           start_dopa=I(dopa_start_visit<6),
+           y_change=y-x_bl) %>%
+    group_by(group) %>%
+    summarise(perc_stop_treatment= 100*mean(stop_treatment),
+              perc_start_dopa    = 100*mean(start_dopa),
+              mean_y_change      = mean(y_change),
+              sd_y_change        = sd(y_change), 
+              .groups = "drop")
+  
+  print(kable(cbind(d_tab[,1],round(d_tab[,-1],4))))
+  
+  # plot (cat("\n") & print are necessary because otherwise the plot is not displayed [??])
+  p <- data %>% group_by(group,time) %>%
+    summarise(y_mean=mean(y-x_bl), .groups = "drop") %>% 
+    ggplot(aes(time,y_mean,col=group))+
+    geom_point()+geom_line()+
+    labs(title="Mean change from baseline",x="Time (months)", y="Mean change from baseline")+
+    scale_x_continuous(breaks=seq(0,12,by=2))+
+    scale_y_continuous(limits=c(-2,10.5))
+  cat("\n")
+  print(p)
+}
+
+```
+
